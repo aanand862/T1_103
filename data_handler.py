@@ -1,6 +1,8 @@
 import pandas as pd
 import os
 import datetime
+import streamlit as st
+from github import Github
 
 # Schemas for different logs
 LOG_CONFIG = {
@@ -18,13 +20,66 @@ LOG_CONFIG = {
     }
 }
 
+def get_github_repo():
+    """Returns the GitHub repo object if secrets are configured."""
+    try:
+        if "gt_token" in st.secrets and "github_repo" in st.secrets:
+            g = Github(st.secrets["gt_token"])
+            return g.get_repo(st.secrets["github_repo"])
+    except Exception as e:
+        print(f"GitHub Auth Error: {e}")
+    return None
+
+def fetch_from_github(config):
+    """Attempts to fetch the CSV from GitHub and save it locally."""
+    repo = get_github_repo()
+    if not repo:
+        return False
+    
+    file_path = config['file']
+    try:
+        contents = repo.get_contents(file_path)
+        with open(file_path, "wb") as f:
+            f.write(contents.decoded_content)
+        return True
+    except Exception as e:
+        print(f"GitHub Fetch Error for {file_path}: {e}")
+        return False
+
+def sync_to_github(config, df):
+    """Updates the file on GitHub with the current dataframe content."""
+    repo = get_github_repo()
+    if not repo:
+        return False
+        
+    file_path = config['file']
+    csv_content = df.to_csv(index=False)
+    commit_msg = f"Automated Update: {file_path}"
+    
+    try:
+        # Check if file exists to update, else create
+        try:
+            contents = repo.get_contents(file_path)
+            repo.update_file(file_path, commit_msg, csv_content, contents.sha)
+        except:
+             repo.create_file(file_path, commit_msg, csv_content)
+        return True
+    except Exception as e:
+        print(f"GitHub Sync Error: {e}")
+        return False
+
 def load_data(log_type):
-    """Loads the log data for a specific type."""
+    """Loads the log data for a specific type. Tries GitHub if local missing."""
     config = LOG_CONFIG.get(log_type)
     if not config:
         return pd.DataFrame()
 
     file_path = config['file']
+    
+    # If local file doesn't exist, try fetching from GitHub first
+    if not os.path.exists(file_path):
+        fetch_from_github(config)
+
     if not os.path.exists(file_path):
         return pd.DataFrame(columns=config['columns'])
     
@@ -37,7 +92,7 @@ def load_data(log_type):
         return pd.DataFrame(columns=config['columns'])
 
 def save_entry(log_type, data_dict):
-    """Saves a generic entry based on log type."""
+    """Saves a generic entry based on log type and syncs to GitHub."""
     df = load_data(log_type)
     entry_date = data_dict['date']
     
@@ -53,7 +108,11 @@ def save_entry(log_type, data_dict):
     
     config = LOG_CONFIG.get(log_type)
     if config:
+        # Save locally
         df.to_csv(config['file'], index=False)
+        
+        # Sync to GitHub
+        sync_to_github(config, df)
         return True
     return False
 
@@ -69,19 +128,9 @@ def get_missing_dates(log_type, year, month):
     if start_date > today:
         return []
 
-    # End date (inclusive) for checking: yesterday? Or today?
-    # Request said "missing log", usually implying past days.
-    # Let's check up to yesterday to avoid annoying user about today if they just woke up.
-    # Or check up to today if it's evening? Simpler: Check up to yesterday.
-    
     # Logic: Range end is yesterday. If today is 1st, range is empty.
     end_date_limit = today - datetime.timedelta(days=1)
     
-    # However, if we are looking at a past month, range is full month.
-    # Logic: get all days in month, filter those <= end_date_limit
-    
-    # Generate all dates for the month
-    # pd.date_range is useful
     # Handle end of month
     if month == 12:
         next_month = datetime.date(year + 1, 1, 1)
