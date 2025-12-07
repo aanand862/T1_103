@@ -1,5 +1,5 @@
 date,delivered,quantity
-2025-12-01,True,11.0
+2025-12-01,False,0.0
 2025-12-02,True,5.0
 2025-12-03,True,1.0
 2025-12-04,True,4.0
