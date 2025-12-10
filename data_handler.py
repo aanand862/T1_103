@@ -116,6 +116,26 @@ def save_entry(log_type, data_dict):
         return True
     return False
 
+def delete_entry(log_type, entry_date):
+    """Deletes an entry for a specific date."""
+    df = load_data(log_type)
+    
+    if isinstance(entry_date, datetime.datetime):
+        entry_date = entry_date.date()
+    
+    # Remove entry for this date
+    df = df[df['date'] != entry_date]
+    
+    config = LOG_CONFIG.get(log_type)
+    if config:
+        # Save locally
+        df.to_csv(config['file'], index=False)
+        
+        # Sync to GitHub
+        sync_to_github(config, df)
+        return True
+    return False
+
 def get_missing_dates(log_type, year, month):
     """Returns a list of dates in the given month (up to yesterday) that have no entry."""
     df = load_data(log_type)
