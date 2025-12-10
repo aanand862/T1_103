@@ -38,8 +38,11 @@ st.markdown("""
         background-color: #f0f0f0;
     }
     
-    .today-btn {
-        border: 2px solid #4CAF50 !important;
+    /* Highlight today's date with light orange background */
+    .stButton button[kind="primary"] {
+        background-color: #FFE5CC !important; /* Light orange background */
+        border: 2px solid #FF8C00 !important;
+        color: #000 !important;
     }
     
     /* Responsive metrics */
@@ -196,28 +199,42 @@ def entry_dialog(date_obj, log_type_ui, current_data=None):
     type_map = {"Milk 🥛": "milk", "Maid 🧹": "maid", "Cook 🍳": "cook"}
     backend_type = type_map[log_type_ui]
     
-    with st.form("entry_form"):
-        payload = {'date': date_obj}
+    
+    if log_type_ui == "Milk 🥛":
+        # Defaults
+        def_del = True
+        def_qty = 1.0
+        if current_data is not None:
+            def_del = bool(current_data['delivered'])
+            def_qty = float(current_data['quantity'])
         
-        if log_type_ui == "Milk 🥛":
-            # Defaults
-            def_del = True
-            def_qty = 1.0
-            if current_data is not None:
-                def_del = bool(current_data['delivered'])
-                def_qty = float(current_data['quantity'])
-                
-            is_delivered = st.checkbox("Delivered?", value=def_del)
-            qty_input = st.number_input("Quantity (L)", value=def_qty, step=0.5, disabled=not is_delivered)
-            payload.update({'delivered': is_delivered, 'quantity': qty_input if is_delivered else 0.0})
+        # Checkbox OUTSIDE form for reactive behavior
+        is_delivered = st.checkbox("Delivered?", value=def_del, key=f"delivered_{date_obj}")
+        
+        with st.form("entry_form"):
+            payload = {'date': date_obj}
             
-        elif log_type_ui == "Maid 🧹":
-            def_m = True
-            def_e = True
-            if current_data is not None:
-                def_m = (current_data['morning_status'] == 'Present')
-                def_e = (current_data['evening_status'] == 'Present')
-                
+            # Only show quantity input if delivered
+            if is_delivered:
+                qty_input = st.number_input("Quantity (L)", value=def_qty, step=0.5)
+                payload.update({'delivered': True, 'quantity': qty_input})
+            else:
+                payload.update({'delivered': False, 'quantity': 0.0})
+
+            if st.form_submit_button("Save"):
+                if save_entry(backend_type, payload):
+                    st.toast("Saved successfully!", icon="💾")
+                    st.rerun()
+        
+    elif log_type_ui == "Maid 🧹":
+        def_m = True
+        def_e = True
+        if current_data is not None:
+            def_m = (current_data['morning_status'] == 'Present')
+            def_e = (current_data['evening_status'] == 'Present')
+        
+        with st.form("entry_form"):
+            payload = {'date': date_obj}
             c1, c2 = st.columns(2)
             with c1:
                 m = st.checkbox("Morning", value=def_m)
@@ -227,19 +244,26 @@ def entry_dialog(date_obj, log_type_ui, current_data=None):
                 'morning_status': 'Present' if m else 'Absent',
                 'evening_status': 'Present' if e else 'Absent'
             })
-            
-        elif log_type_ui == "Cook 🍳":
-            def_m = True
-            if current_data is not None:
-                def_m = (current_data['morning_status'] == 'Present')
-            
+
+            if st.form_submit_button("Save"):
+                if save_entry(backend_type, payload):
+                    st.toast("Saved successfully!", icon="💾")
+                    st.rerun()
+        
+    elif log_type_ui == "Cook 🍳":
+        def_m = True
+        if current_data is not None:
+            def_m = (current_data['morning_status'] == 'Present')
+        
+        with st.form("entry_form"):
+            payload = {'date': date_obj}
             m = st.checkbox("Morning Present", value=def_m)
             payload.update({'morning_status': 'Present' if m else 'Absent'})
 
-        if st.form_submit_button("Save"):
-            if save_entry(backend_type, payload):
-                st.toast("Saved successfully!", icon="💾")
-                st.rerun()
+            if st.form_submit_button("Save"):
+                if save_entry(backend_type, payload):
+                    st.toast("Saved successfully!", icon="💾")
+                    st.rerun()
 
 # Generic Calendar View
 def render_calendar(log_type_ui):
@@ -326,10 +350,12 @@ def render_calendar(log_type_ui):
             label = f"{day.day}\n{icon}"
             
             # Highlight today (only if showing current month/year)
-            if day == today:
+            is_today = (day == today)
+            if is_today:
                  label = f"TODAY\n{icon}"
-
-            if cols[i].button(label, key=f"{backend_type}_{day}", use_container_width=True):
+            
+            # Use primary button type for today to apply custom styling
+            if cols[i].button(label, key=f"{backend_type}_{day}", use_container_width=True, type="primary" if is_today else "secondary"):
                 entry_dialog(day, log_type_ui, row_data)
 
 import pandas as pd # Ensure pandas is imported if not already handled by load_data import chain (safe to re-import)
