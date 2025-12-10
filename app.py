@@ -8,24 +8,147 @@ st.set_page_config(
     page_title="T1-103 Utilities APP",
     page_icon="🏠",
     layout="centered",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="auto"
 )
 
-# Custom CSS for calendar buttons
+# Custom CSS for mobile-responsive design
 st.markdown("""
 <style>
+    /* Base responsive font sizing */
+    html {
+        font-size: clamp(14px, 2vw, 16px);
+    }
+    
+    /* Mobile-optimized buttons with touch-friendly sizing */
     .stButton>button {
         width: 100%;
         border-radius: 10px;
         height: 60px;
+        min-height: 44px; /* Minimum touch target size */
         font-weight: bold;
         border: 1px solid #ddd;
+        font-size: clamp(0.75rem, 2vw, 0.9rem);
+        padding: 8px 4px;
+        line-height: 1.2;
+        transition: all 0.2s ease;
     }
+    
+    .stButton>button:active {
+        transform: scale(0.98);
+        background-color: #f0f0f0;
+    }
+    
     .today-btn {
         border: 2px solid #4CAF50 !important;
     }
+    
+    /* Responsive metrics */
     [data-testid="stMetricValue"] {
-        font-size: 1.5rem;
+        font-size: clamp(1.2rem, 3vw, 1.5rem);
+    }
+    
+    [data-testid="stMetricLabel"] {
+        font-size: clamp(0.8rem, 2vw, 1rem);
+    }
+    
+    /* Mobile-specific optimizations */
+    @media (max-width: 768px) {
+        /* Reduce button height on mobile for better fit */
+        .stButton>button {
+            height: 50px;
+            font-size: 0.75rem;
+            padding: 6px 2px;
+        }
+        
+        /* Optimize title sizing */
+        h1 {
+            font-size: 1.5rem !important;
+        }
+        
+        h2 {
+            font-size: 1.2rem !important;
+        }
+        
+        h3 {
+            font-size: 1rem !important;
+        }
+        
+        /* Better spacing for mobile */
+        .block-container {
+            padding-top: 1rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        
+        /* Optimize form inputs for touch */
+        input[type="number"], 
+        input[type="text"],
+        input[type="date"] {
+            font-size: 16px !important; /* Prevents zoom on iOS */
+            min-height: 44px;
+        }
+        
+        /* Better checkbox sizing */
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        /* Optimize selectbox for mobile */
+        [data-baseweb="select"] {
+            font-size: 0.9rem;
+        }
+        
+        /* Stack columns better on mobile */
+        [data-testid="column"] {
+            padding: 0.25rem !important;
+        }
+        
+        /* Improve dialog sizing on mobile */
+        [data-testid="stDialog"] {
+            width: 95vw !important;
+            max-width: 95vw !important;
+        }
+        
+        /* Better metric display on mobile */
+        [data-testid="stMetric"] {
+            padding: 0.5rem;
+        }
+    }
+    
+    /* Extra small screens */
+    @media (max-width: 480px) {
+        .stButton>button {
+            height: 45px;
+            font-size: 0.7rem;
+            padding: 4px 2px;
+        }
+        
+        h1 {
+            font-size: 1.3rem !important;
+        }
+        
+        /* Tighter spacing for very small screens */
+        .block-container {
+            padding-left: 0.25rem !important;
+            padding-right: 0.25rem !important;
+        }
+    }
+    
+    /* Improve radio button navigation */
+    [data-testid="stHorizontalBlock"] {
+        gap: 0.5rem;
+    }
+    
+    /* Better form submit button */
+    .stButton button[kind="primary"],
+    .stButton button[type="submit"] {
+        background-color: #4CAF50;
+        color: white;
+        font-size: 1rem;
+        height: 48px;
+        min-height: 48px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -33,7 +156,7 @@ st.markdown("""
 st.title("T1-103 Utilities APP 🏠")
 
 # Sidebar navigation
-page = st.sidebar.radio("Navigate", ["Milk 🥛", "Maid 🧹", "Cook 🍳"], horizontal=True)
+page = st.sidebar.radio("Navigate", ["Milk 🥛", "Maid 🧹", "Cook 🍳"])
 
 # Helper to determining status icon
 def get_status_icon(log_type, date_obj, data_df):
@@ -169,11 +292,19 @@ def render_calendar(log_type_ui):
     cal = calendar.Calendar(firstweekday=0) # 0 = Monday
     month_days = cal.monthdatescalendar(year, month)
     
-    # Weekday Headers
-    cols = st.columns(7)
-    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    for i, d in enumerate(days):
-        cols[i].markdown(f"**{d}**")
+    # Weekday Headers - using HTML for better mobile control
+    weekday_html = """
+    <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 8px; text-align: center; font-weight: bold; font-size: 0.9rem;">
+        <div>Mon</div>
+        <div>Tue</div>
+        <div>Wed</div>
+        <div>Thu</div>
+        <div>Fri</div>
+        <div>Sat</div>
+        <div>Sun</div>
+    </div>
+    """
+    st.markdown(weekday_html, unsafe_allow_html=True)
         
     for week in month_days:
         cols = st.columns(7)
