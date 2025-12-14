@@ -1,7 +1,7 @@
 import streamlit as st
 import datetime
 import calendar
-from data_handler import save_entry, load_data, delete_entry
+from data_handler import save_entry, load_data, delete_entry, get_milk_finance, save_milk_finance
 
 # Page config
 st.set_page_config(
@@ -313,26 +313,65 @@ def render_calendar(log_type_ui):
     df = load_data(backend_type)
     
     # Stats row
+    # Stats row
+    # Calculate Monthly Stats
+    m_df = pd.DataFrame()
     if not df.empty:
-        # Filter for selected month
         temp_date = pd.to_datetime(df['date'])
         mask = (temp_date.dt.month == month) & (temp_date.dt.year == year)
         m_df = df[mask]
+
+    if backend_type == 'milk':
+        # Load finance data - Independent of milk logs
+        fin_data = get_milk_finance(year, month)
+        current_rate = fin_data['rate']
+        current_advance = fin_data['advance']
         
-        c1, c2 = st.columns(2)
-        if backend_type == 'milk':
-            tot = m_df[m_df['delivered']==True]['quantity'].sum()
-            c1.metric("Total Milk", f"{tot} L")
-            absent = m_df[m_df['delivered']==False].shape[0]
-            c2.metric("Days Absent", absent)
-        elif backend_type == 'maid':
+        # Finance Controls Expander
+        with st.expander("💰 Monthly Finance Settings", expanded=False):
+            with st.form("finance_form"):
+                f_c1, f_c2 = st.columns(2)
+                with f_c1:
+                    new_rate = st.number_input("Rate (₹/L)", value=current_rate, step=1.0)
+                with f_c2:
+                    new_advance = st.number_input("Advance Paid (₹)", value=current_advance, step=100.0)
+                    
+                if st.form_submit_button("Update Finance"):
+                    if save_milk_finance(year, month, new_rate, new_advance):
+                        st.toast("Finance settings updated!", icon="💰")
+                        st.rerun()
+
+        # Calculate Totals
+        tot_qty = 0.0
+        absent_days = 0
+        if not m_df.empty:
+            tot_qty = m_df[m_df['delivered']==True]['quantity'].sum()
+            absent_days = m_df[m_df['delivered']==False].shape[0]
+            
+        tot_bill = tot_qty * current_rate
+        remaining = tot_bill - current_advance
+        
+        # Display Metrics in two rows for better mobile view
+        r1_c1, r1_c2 = st.columns(2)
+        r1_c1.metric("Total Milk", f"{tot_qty} L")
+        r1_c2.metric("Days Absent", absent_days)
+        
+        r2_c1, r2_c2, r2_c3 = st.columns(3)
+        r2_c1.metric("Total Bill", f"₹{tot_bill:.0f}")
+        r2_c2.metric("Advance", f"₹{current_advance:.0f}")
+        r2_c3.metric("Payable", f"₹{remaining:.0f}")
+        
+    elif backend_type == 'maid':
+        if not m_df.empty:
             abs_m = m_df[m_df['morning_status']=='Absent'].shape[0]
             abs_e = m_df[m_df['evening_status']=='Absent'].shape[0]
+            c1, c2 = st.columns(2)
             c1.metric("Morning Absent", abs_m)
             c2.metric("Evening Absent", abs_e)
-        elif backend_type == 'cook':
+    elif backend_type == 'cook':
+        if not m_df.empty:
             abs_m = m_df[m_df['morning_status']=='Absent'].shape[0]
-            c1.metric("Morning Absent", abs_m)
+            st.metric("Morning Absent", abs_m)
             
     st.divider()
 

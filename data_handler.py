@@ -10,6 +10,10 @@ LOG_CONFIG = {
         'file': 'milk_log.csv',
         'columns': ['date', 'delivered', 'quantity']
     },
+    'milk_finance': {
+        'file': 'milk_finance.csv',
+        'columns': ['year', 'month', 'rate', 'advance']
+    },
     'maid': {
         'file': 'maid_log.csv',
         'columns': ['date', 'morning_status', 'evening_status'] # status: "Present", "Absent"
@@ -85,7 +89,8 @@ def load_data(log_type):
     
     try:
         df = pd.read_csv(file_path)
-        df['date'] = pd.to_datetime(df['date']).dt.date
+        if 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date']).dt.date
         return df
     except Exception as e:
         print(f"Error loading {log_type} data: {e}")
@@ -103,7 +108,11 @@ def save_entry(log_type, data_dict):
     df = df[df['date'] != entry_date]
     
     new_entry = pd.DataFrame([data_dict])
-    df = pd.concat([df, new_entry], ignore_index=True)
+    if df.empty:
+        df = new_entry
+    else:
+        df = pd.concat([df, new_entry], ignore_index=True)
+        
     df = df.sort_values(by='date')
     
     config = LOG_CONFIG.get(log_type)
@@ -183,3 +192,70 @@ def get_monthly_stats(log_type, year, month):
     temp_df['date'] = pd.to_datetime(temp_df['date'])
     mask = (temp_df['date'].dt.year == year) & (temp_df['date'].dt.month == month)
     return temp_df[mask]
+
+def get_milk_finance(year, month):
+    """
+    Returns dictionary with 'rate' and 'advance' for the given month.
+    If rate is missing for current month, tries to find most recent previous rate.
+    """
+    df = load_data('milk_finance')
+    
+    # Defaults
+    data = {'rate': 0.0, 'advance': 0.0}
+    
+    if df.empty:
+        return data
+        
+    # Check for exact match
+    match = df[(df['year'] == year) & (df['month'] == month)]
+    if not match.empty:
+        data['rate'] = float(match.iloc[0]['rate'])
+        data['advance'] = float(match.iloc[0]['advance'])
+        return data
+    
+    # If no exact match, look for most recent rate
+    # Sort by year desc, month desc
+    df_sorted = df.sort_values(by=['year', 'month'], ascending=False)
+    
+    # Filter for dates before current year/month
+    # (Simple logic: year < cur_year OR (year == cur_year AND month < cur_month))
+    past_mask = (df_sorted['year'] < year) | ((df_sorted['year'] == year) & (df_sorted['month'] < month))
+    past_df = df_sorted[past_mask]
+    
+    if not past_df.empty:
+        # Use the most recent rate found
+        data['rate'] = float(past_df.iloc[0]['rate'])
+        # Advance is specific to a month, so it stays 0.0
+        
+    return data
+
+def save_milk_finance(year, month, rate, advance):
+    """Saves or updates milk finance data for a specific month."""
+    config = LOG_CONFIG['milk_finance']
+    df = load_data('milk_finance')
+    
+    # Remove existing entry for this month
+    if not df.empty:
+        mask = (df['year'] == year) & (df['month'] == month)
+        df = df[~mask]
+    
+    new_entry = pd.DataFrame([{
+        'year': year,
+        'month': month,
+        'rate': rate,
+        'advance': advance
+    }])
+    
+    if df.empty:
+        df = new_entry
+    else:
+        df = pd.concat([df, new_entry], ignore_index=True)
+        
+    df = df.sort_values(by=['year', 'month'])
+    
+    # Save locally
+    df.to_csv(config['file'], index=False)
+    
+    # Sync to GitHub
+    sync_to_github(config, df)
+    return True
